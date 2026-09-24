@@ -904,7 +904,7 @@ for (const line of addressLinesUsed) {
 ctx.font = `${fsGPS}px 'Courier New', monospace`;
 ctx.fillStyle = '#b6e86a';
 ctx.shadowBlur = 4;
-ctx.fillText('GPS', iconX, y);
+ctx.fillText('🧭 ', iconX, y);
 ctx.fillText(`Lat ${latStr}   Long ${lngStr}`, textX, y);
 y += fsGPS + lineGap;
 
@@ -912,7 +912,7 @@ y += fsGPS + lineGap;
 ctx.font = `${fsTime}px 'Courier New', monospace`;
 ctx.fillStyle = '#ffe37a';
 ctx.shadowBlur = 4;
-ctx.fillText('🕐', iconX, y);
+ctx.fillText('🕐 ', iconX, y);
 ctx.fillText(`${timestamp}  ${tzAbbr}`, textX, y);
 
 // --- Serial (top right) ---
