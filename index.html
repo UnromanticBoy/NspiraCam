@@ -252,14 +252,14 @@
 
     <div class="container">
         <div class="header">
-            <h1>Nspira Photo Stamping(By F&A)-4</h1>
+            <h1>Nspira Photo Stamping(By F&A)-5</h1>
         </div>
 
         <div class="video-wrapper" id="videoWrapper">
             <video id="video" autoplay playsinline muted></video>
 
             <div class="live-stamp" id="liveStamp">
-                <div class="ls-company">📸 Captured By Nspira Camera</div>
+                <div class="ls-company">Captured By Nspira Camera</div>
                 <div class="ls-address" id="lsAddress">📍 Detecting address...</div>
                 <div class="ls-gps" id="lsGps">Lat --.------°   Long --.------°</div>
                 <div class="ls-time" id="lsTime">🕐 --/--/---- --:--:-- --</div>
@@ -314,7 +314,7 @@
         // CONFIGURATION
         // ============================================================
         const CONFIG = {
-            companyName: 'Captured By Nspira Camera',
+            companyName: '📸 Captured By Nspira Camera',
             countPrefix: 'NSP-',
             addressMaxLines: 3,          // Up to 4 lines for a fuller address
             addressCharsPerLine: 80,     // Better fit for building/institution names
@@ -324,9 +324,9 @@
             // ✅ Use embedded logo — no CORS, always draws
             logoDataUri: LOGO_DATA_URI,
             outputWidth: 960,
-            outputHeight: 768,
+            outputHeight: 960,
             // ✅ Stamp: 28% of 4:3 canvas (photo gets 72% — matches reference)
-            stampRatioOfHeight: 0.28,
+            stampRatioOfHeight: 0.22,
         };
 
         // ============================================================
@@ -960,7 +960,7 @@ if (logoReady && logoImage) {
                     previewImage.src = URL.createObjectURL(blob);
                     previewWrapper.style.display = 'block';
                     downloadBtn.disabled = false;
-                    statusMsg.innerHTML = `<span class="ready">✅ Captured (5:3). Press Download.</span>`;
+                    statusMsg.innerHTML = `<span class="ready">✅ Captured.Press Download.</span>`;
                 }, 'image/jpeg', 0.92);
             } catch (err) {
                 statusMsg.innerHTML = `<span class="error">❌ Capture failed: ${err.message}</span>`;
