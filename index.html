@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Nspira Camera - Photo Stamping</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            padding: 14px;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .container {
+            max-width: 520px;
+            width: 100%;
+            background: #16213e;
+            border-radius: 20px;
+            padding: 18px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 14px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e94560;
+        }
+        .header h1 {
+            font-size: 18px;
+            color: #e94560;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+            text-align: center;
+        }
+
+        .video-wrapper {
+            position: relative;
+            background: #0f0f23;
+            border-radius: 14px;
+            overflow: hidden;
+            width: 100%;
+            aspect-ratio: 3 / 4;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            position: absolute;
+            top: 0; left: 0;
+        }
+
+        /* ✅ Lighter overlay so the photo behind is visible */
+        .live-stamp {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(180deg, rgba(20,20,40,0.35) 0%, rgba(10,10,25,0.62) 100%);
+            border-top: 2.5px solid rgba(233, 69, 96, 0.95);
+            padding: 10px 14px 14px;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            pointer-events: none;
+            z-index: 5;
+            overflow: hidden;
+        }
+        .live-stamp .ls-company {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 15px;
+            font-weight: 700;
+            color: #ffffff;
+            letter-spacing: 0.2px;
+            line-height: 1.25;
+            margin-bottom: 5px;
+            padding-right: 80px;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.95);
+        }
+        .live-stamp .ls-company::before {
+            content: '';
+            display: inline-block;
+            width: 4px;
+            height: 18px;
+            background: #e94560;
+            border-radius: 2px;
+            flex-shrink: 0;
+        }
+        .live-stamp .ls-address {
+            font-size: 12px;
+            color: #c9ddff;
+            line-height: 1.4;
+            margin-bottom: 5px;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.95);
+        }
+        .live-stamp .ls-gps {
+            font-size: 11.5px;
+            color: #9ee06a;
+            font-family: 'Courier New', monospace;
+            margin-bottom: 4px;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.95);
+        }
+        .live-stamp .ls-time {
+            font-size: 11.5px;
+            color: #ffe37a;
+            font-family: 'Courier New', monospace;
+            padding-right: 100px;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.95);
+        }
+        .live-stamp .ls-serial {
+            position: absolute;
+            top: 10px;
+            right: 14px;
+            font-size: 22px;
+            font-weight: 900;
+            color: rgba(255, 215, 0, 0.65);
+            font-family: 'Arial Black', Arial, sans-serif;
+            letter-spacing: 0.5px;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.95);
+        }
+        .live-stamp .ls-logo {
+            position: absolute;
+            bottom: 12px;
+            right: 14px;
+            width: 90px;
+            height: auto;
+            opacity: 1;
+            display: block;
+            filter: drop-shadow(0 1px 2px rgba(0,0,0,0.9));
+        }
+
+        .flash {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: white; opacity: 0; pointer-events: none; transition: opacity 0.1s;
+            z-index: 10;
+        }
+        .flash.active { opacity: 0.8; }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 14px;
+        }
+        .controls button {
+            padding: 14px 10px;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex: 1;
+            min-width: 0;
+        }
+        .btn-capture { background: #e94560; color: white; }
+        .btn-capture:active { background: #c73652; transform: scale(0.98); }
+        .btn-capture:disabled { background: #444; color: #888; cursor: not-allowed; }
+        .btn-switch { background: #533483; color: white; }
+        .btn-switch:active { background: #6a4b9e; }
+        .btn-download { background: #0f3460; color: white; }
+        .btn-download:active { background: #1a4a7a; }
+        .btn-download:disabled { background: #444; color: #888; cursor: not-allowed; }
+
+        .status-msg {
+            margin-top: 10px;
+            text-align: center;
+            font-size: 12.5px;
+            color: #888;
+            padding: 8px;
+            border-radius: 8px;
+            background: #0f0f23;
+            min-height: 30px;
+        }
+        .status-msg .ready { color: #4caf50; }
+        .status-msg .error { color: #e94560; }
+        .status-msg .warn { color: #ffb74d; }
+
+        .preview-wrapper {
+            margin-top: 12px;
+            display: none;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid #e94560;
+            position: relative;
+        }
+        .preview-wrapper img { width: 100%; display: block; }
+
+        .ios-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.95);
+            z-index: 9999;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .ios-overlay.active { display: flex; }
+        .ios-overlay img { max-width: 100%; max-height: 65vh; border-radius: 12px; border: 2px solid #e94560; }
+        .ios-overlay .hint {
+            color: #fff; margin-top: 16px; font-size: 15px; text-align: center;
+            line-height: 1.6;
+        }
+        .ios-overlay .hint strong { color: #ffd54f; }
+        .ios-overlay .close-btn {
+            margin-top: 16px; padding: 12px 30px; border-radius: 50px;
+            background: #e94560; color: white; border: none;
+            font-size: 15px; font-weight: 600; cursor: pointer;
+        }
+        .ios-overlay .action-row {
+            display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; justify-content: center;
+        }
+        .ios-overlay .action-row button {
+            padding: 12px 24px; border-radius: 50px; border: none;
+            font-size: 14px; font-weight: 600; cursor: pointer;
+        }
+        .ios-overlay .btn-save { background: #4caf50; color: white; }
+
+        @media (max-width: 400px) {
+            .container { padding: 12px; }
+            .header h1 { font-size: 15px; }
+            .controls button { font-size: 12px; padding: 12px 6px; }
+            .live-stamp .ls-company { font-size: 13px; padding-right: 70px; }
+            .live-stamp .ls-address { font-size: 10.5px; }
+            .live-stamp .ls-gps, .live-stamp .ls-time { font-size: 10px; }
+            .live-stamp .ls-time { padding-right: 85px; }
+            .live-stamp .ls-serial { font-size: 18px; }
+            .live-stamp .ls-logo { width: 70px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="header">
+            <h1>Nspira Photo Stamping(By F&A)</h1>
+        </div>
+
+        <div class="video-wrapper" id="videoWrapper">
+            <video id="video" autoplay playsinline muted></video>
+
+            <div class="live-stamp" id="liveStamp">
+                <div class="ls-serial" id="lsSerial">NSP-1</div>
+                <div class="ls-company">Captured By Nspira Camera</div>
+                <div class="ls-address" id="lsAddress">📍 Detecting address...</div>
+                <div class="ls-gps" id="lsGps">Lat --.------°   Long --.------°</div>
+                <div class="ls-time" id="lsTime">🕐 --/--/---- --:--:-- --</div>
+                <img class="ls-logo" id="lsLogo" src="https://mynspira.in/assets/images/logo-light.png" alt="NSPIRA logo">
+            </div>
+
+            <div class="flash" id="flash"></div>
+        </div>
+
+        <div class="controls">
+            <button class="btn-capture" id="captureBtn" disabled>📷 Capture</button>
+            <button class="btn-switch" id="switchBtn">🔄 Switch</button>
+            <button class="btn-download" id="downloadBtn" disabled>⬇️ Download</button>
+        </div>
+
+        <div class="status-msg" id="statusMsg">
+            <span class="ready">✅ Camera ready</span>
+        </div>
+
+        <div class="preview-wrapper" id="previewWrapper">
+            <img id="previewImage" alt="Captured preview" />
+        </div>
+    </div>
+
+    <div class="ios-overlay" id="iosOverlay">
+        <img id="iosOverlayImg" alt="Save this image" />
+        <div class="hint">
+            <strong>iOS Detected</strong><br />
+            Long-press the image above and choose <strong>"Save to Photos"</strong><br />
+            or tap <strong>Share</strong> to save/share.
+        </div>
+        <div class="action-row">
+            <button class="btn-save" id="iosSaveBtn">💾 Share / Save</button>
+            <button class="close-btn" id="iosCloseBtn">✕ Close</button>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================
+        // ✅ LOGO — Replace with YOUR real logo as base64 data URI.
+        //
+        // How to get a base64 data URI for your PNG logo:
+        //   1. Visit https://base64.guru/converter/encode/image
+        //   2. Upload your nspira logo PNG
+        //   3. Copy the "data:image/png;base64,..." output
+        //   4. Paste it below, replacing the placeholder string.
+        //
+        // Below is a temporary inline SVG data URI so the demo works
+        // without CORS issues. Replace it with your real logo!
+        // ============================================================
+        const LOGO_DATA_URI = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAABOCAMAAACt6NuiAAAAAXNSR0IB2cksfwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAwBQTFRFAAAA////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////Bz0LCAAAAQB0Uk5TAAEDBxg2UGJ3ho6Ri35qVTweCQYLfKXG5+3z+v7/8tu+jVImEg8cLUSDq87j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';        // ============================================================
+        // CONFIGURATION
+        // ============================================================
+        const CONFIG = {
+            companyName: 'Captured By Nspira Camera',
+            countPrefix: 'NSP-',
+            addressMaxLines: 3,          // ✅ allow up to 4 lines (natural wrapping)
+            addressCharsPerLine: 70,     // ✅ natural width, doesn't shrink text
+            dbUploadUrl: '',
+            dbApiKey: '',
+            lsSerialKey: 'nspira_serial_count',
+            // ✅ Use embedded logo — no CORS, always draws
+            logoDataUri: LOGO_DATA_URI,
+            outputWidth: 1024,
+            outputHeight: 768,
+            // ✅ Stamp: 28% of 4:3 canvas (photo gets 72% — matches reference)
+            stampRatioOfHeight: 0.28,
+        };
+
+        // ============================================================
+        // DOM References
+        // ============================================================
+        const video = document.getElementById('video');
+        const videoWrapper = document.getElementById('videoWrapper');
+        const captureBtn = document.getElementById('captureBtn');
+        const switchBtn = document.getElementById('switchBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const previewWrapper = document.getElementById('previewWrapper');
+        const previewImage = document.getElementById('previewImage');
+        const flash = document.getElementById('flash');
+        const statusMsg = document.getElementById('statusMsg');
+
+        const lsSerial = document.getElementById('lsSerial');
+        const lsAddress = document.getElementById('lsAddress');
+        const lsGps = document.getElementById('lsGps');
+        const lsTime = document.getElementById('lsTime');
+
+        // ✅ Update the live preview logo to the embedded one too
+        const lsLogo = document.getElementById('lsLogo');
+        if (lsLogo) lsLogo.src = LOGO_DATA_URI;
+
+        const iosOverlay = document.getElementById('iosOverlay');
+        const iosOverlayImg = document.getElementById('iosOverlayImg');
+        const iosCloseBtn = document.getElementById('iosCloseBtn');
+        const iosSaveBtn = document.getElementById('iosSaveBtn');
+
+        // ============================================================
+        // State
+        // ============================================================
+        let stream = null;
+        let facingMode = 'environment';
+        let photoCount = parseInt(localStorage.getItem(CONFIG.lsSerialKey) || '0', 10);
+        let currentPhotoBlob = null;
+        let currentPhotoSerial = 0;
+        let serialCommitted = false;
+        let currentGPS = { lat: null, lng: null, accuracy: null, address: 'Detecting address...' };
+        let watchId = null;
+        let gpsReady = false;
+
+        let logoImage = null;
+        let logoReady = false;
+
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+        // ============================================================
+        // Logo loader — now uses embedded data URI, always loads
+        // ============================================================
+        function loadLogo() {
+            return new Promise((resolve) => {
+                const img = new Image();
+                // No crossOrigin needed for data URIs
+                img.onload = () => {
+                    logoImage = img;
+                    logoReady = true;
+                    console.log('✅ Logo loaded:', img.naturalWidth + 'x' + img.naturalHeight);
+                    resolve(true);
+                };
+                img.onerror = (e) => {
+                    console.error('❌ Logo failed to load!', e);
+                    logoReady = false;
+                    resolve(false);
+                };
+                img.src = CONFIG.logoDataUri;
+            });
+        }
+
+        // ============================================================
+        // Serial helpers
+        // ============================================================
+        function getNextSerialNumber() { return photoCount + 1; }
+
+        function commitSerial() {
+            if (serialCommitted) return;
+            photoCount++;
+            localStorage.setItem(CONFIG.lsSerialKey, String(photoCount));
+            serialCommitted = true;
+        }
+
+        // ============================================================
+        // Format date/time
+        // ============================================================
+        function formatDateTime12hr(now) {
+            const d = now || new Date();
+            const pad = (n) => String(n).padStart(2, '0');
+            const day = pad(d.getDate());
+            const month = pad(d.getMonth() + 1);
+            const year = d.getFullYear();
+            let hours = d.getHours();
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12 || 12;
+            const minutes = pad(d.getMinutes());
+            const seconds = pad(d.getSeconds());
+            return `${day}/${month}/${year} ${hours}:${minutes}:${seconds} ${ampm}`;
+        }
+
+        function getTimezoneAbbr() {
+            try {
+                const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                const parts = new Intl.DateTimeFormat('en-US', {
+                    timeZoneName: 'short', timeZone: tz
+                }).formatToParts(new Date());
+                const tzPart = parts.find(p => p.type === 'timeZoneName');
+                return tzPart ? tzPart.value : tz;
+            } catch { return ''; }
+        }
+
+        // ============================================================
+        // Update live overlay + enable/disable Capture
+        // ============================================================
+        function updateUI() {
+            const now = new Date();
+            const serial = getNextSerialNumber();
+            lsSerial.textContent = `${CONFIG.countPrefix}${serial}`;
+
+            if (currentGPS.lat !== null && currentGPS.lng !== null) {
+                lsGps.textContent = `Lat ${currentGPS.lat.toFixed(6)}°   Long ${currentGPS.lng.toFixed(6)}°`;
+            } else {
+                lsGps.textContent = 'Lat --.------°   Long --.------°';
+            }
+
+            lsTime.textContent = `🕐 ${formatDateTime12hr(now)} ${getTimezoneAbbr()}`;
+
+            if (currentGPS.address && currentGPS.address !== 'Detecting address...') {
+                lsAddress.textContent = `📍 ${currentGPS.address}`;
+            } else {
+                lsAddress.textContent = '📍 Detecting address...';
+            }
+
+            const addressReady = currentGPS.address &&
+                                 currentGPS.address !== 'Detecting address...' &&
+                                 currentGPS.address !== 'Address lookup failed' &&
+                                 currentGPS.address !== 'Address unavailable in English';
+            captureBtn.disabled = !(gpsReady && addressReady);
+        }
+
+        setInterval(updateUI, 1000);
+        updateUI();
+
+        // ============================================================
+        // Reverse geocoding
+        // ============================================================
+        function isEnglishText(str) {
+            if (!str) return false;
+            return /^[\x00-\x7F\s,.\-#/()&'":;°]+$/.test(str);
+        }
+
+        function buildFullAddress(addr, displayName) {
+            const parts = [];
+
+            const specific = [
+                addr.building, addr.amenity, addr.institution, addr.university,
+                addr.school, addr.office, addr.shop, addr.hospital, addr.clinic,
+                addr.hotel, addr.restaurant, addr.place_of_worship, addr.tourism,
+                addr.leisure, addr.industrial, addr.commercial, addr.retail,
+            ];
+
+            const generic = [
+                addr.house_number,
+                addr.road || addr.street || addr.pedestrian || addr.footway || addr.path,
+                addr.neighbourhood || addr.suburb || addr.quarter,
+                addr.city_district || addr.district || addr.borough,
+                addr.city || addr.town || addr.village || addr.hamlet,
+                addr.county, addr.state_district, addr.state,
+                addr.postcode, addr.country,
+            ];
+
+            const push = (v) => {
+                if (v && typeof v === 'string' && v.trim() && isEnglishText(v)) {
+                    const clean = v.trim();
+                    if (!parts.some(p => p.toLowerCase() === clean.toLowerCase())) {
+                        parts.push(clean);
+                    }
+                }
+            };
+
+            specific.forEach(push);
+            generic.forEach(push);
+
+            let result = parts.filter(Boolean).join(', ');
+            if (result.length < 20 && displayName && isEnglishText(displayName)) {
+                result = displayName;
+            }
+            return result || 'Location not found';
+        }
+
+        async function getLocationName(lat, lng) {
+            try {
+                const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&accept-language=en&extratags=1`;
+                const response = await fetch(url, {
+                    headers: { 'Accept': 'application/json', 'Accept-Language': 'en' }
+                });
+                const data = await response.json();
+                if (data && data.address) {
+                    currentGPS.address = buildFullAddress(data.address, data.display_name);
+                } else if (data && data.display_name && isEnglishText(data.display_name)) {
+                    currentGPS.address = data.display_name;
+                } else {
+                    currentGPS.address = 'Address unavailable in English';
+                }
+            } catch (err) {
+                currentGPS.address = 'Address lookup failed';
+            }
+            updateUI();
+            return currentGPS.address;
+        }
+
+        // ============================================================
+        // Geolocation
+        // ============================================================
+        function startGeolocation() {
+            if (!navigator.geolocation) {
+                lsAddress.textContent = '📍 GPS not supported';
+                return;
+            }
+            navigator.geolocation.getCurrentPosition(
+                async (pos) => {
+                    currentGPS.lat = pos.coords.latitude;
+                    currentGPS.lng = pos.coords.longitude;
+                    currentGPS.accuracy = pos.coords.accuracy;
+                    gpsReady = true;
+                    updateUI();
+                    await getLocationName(currentGPS.lat, currentGPS.lng);
+                },
+                () => {
+                    lsAddress.textContent = '📍 Location unavailable';
+                },
+                { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
+            );
+
+            if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+            watchId = navigator.geolocation.watchPosition(
+                async (pos) => {
+                    const moved = currentGPS.lat !== null && (
+                        Math.abs(pos.coords.latitude - currentGPS.lat) > 0.0003 ||
+                        Math.abs(pos.coords.longitude - currentGPS.lng) > 0.0003
+                    );
+                    currentGPS.lat = pos.coords.latitude;
+                    currentGPS.lng = pos.coords.longitude;
+                    currentGPS.accuracy = pos.coords.accuracy;
+                    if (!gpsReady) gpsReady = true;
+                    updateUI();
+                    if (moved) {
+                        await getLocationName(currentGPS.lat, currentGPS.lng);
+                    }
+                },
+                () => {},
+                { enableHighAccuracy: true, maximumAge: 10000 }
+            );
+        }
+
+        // ============================================================
+        // Camera
+        // ============================================================
+        async function startCamera(faceMode) {
+            try {
+                if (stream) stream.getTracks().forEach(t => t.stop());
+                const constraints = {
+                    video: { facingMode: faceMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
+                    audio: false,
+                };
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                await video.play();
+                statusMsg.innerHTML = `<span class="ready">✅ Camera ready (${faceMode === 'environment' ? 'Rear' : 'Front'})</span>`;
+                return true;
+            } catch (err) {
+                statusMsg.innerHTML = `<span class="error">❌ Camera error: ${err.message}</span>`;
+                return false;
+            }
+        }
+
+        // ============================================================
+        // Word-safe wrapping
+        // ============================================================
+        function wrapByCharBudget(text, charsPerLine, maxLines) {
+            const words = String(text).split(/\s+/).filter(Boolean);
+            const lines = [];
+            let current = '';
+
+            for (const word of words) {
+                const candidate = current ? current + ' ' + word : word;
+                if (candidate.length <= charsPerLine) {
+                    current = candidate;
+                } else {
+                    if (current) lines.push(current);
+                    current = word;
+                }
+            }
+            if (current) lines.push(current);
+
+            if (lines.length > maxLines) {
+                const head = lines.slice(0, maxLines - 1);
+                const tail = lines.slice(maxLines - 1).join(' ');
+                const tailWords = tail.split(' ');
+                let trimmed = '';
+                for (const w of tailWords) {
+                    const test = trimmed ? trimmed + ' ' + w : w;
+                    if (test.length > charsPerLine) break;
+                    trimmed = test;
+                }
+                if (trimmed !== tail) trimmed = trimmed.replace(/,?\s*$/, '') + '…';
+                head.push(trimmed);
+                return head;
+            }
+            return lines;
+        }
+
+        // ============================================================
+        // Capture
+        // ============================================================
+        async function capturePhoto() {
+            if (!stream) { alert('Camera not ready.'); return; }
+            if (!gpsReady) { alert('Waiting for GPS location...'); return; }
+
+            flash.classList.add('active');
+            setTimeout(() => flash.classList.remove('active'), 150);
+
+            currentPhotoSerial = getNextSerialNumber();
+            serialCommitted = false;
+            const countLabel = `${CONFIG.countPrefix}${currentPhotoSerial}`;
+
+            const now = new Date();
+            const timestamp = formatDateTime12hr(now);
+            const tzAbbr = getTimezoneAbbr();
+            const lat = currentGPS.lat;
+            const lng = currentGPS.lng;
+            const address = currentGPS.address || 'Address unavailable';
+            const latStr = lat !== null ? `${lat.toFixed(6)}°` : '--.------°';
+            const lngStr = lng !== null ? `${lng.toFixed(6)}°` : '--.------°';
+
+            const canvas = document.createElement('canvas');
+            canvas.width = CONFIG.outputWidth;
+            canvas.height = CONFIG.outputHeight;
+            const ctx = canvas.getContext('2d');
+
+            const stampHeight = Math.round(canvas.height * CONFIG.stampRatioOfHeight);
+            const videoHeight = canvas.height - stampHeight;
+
+            // Video (center-crop fill)
+            const vw = video.videoWidth || 1280;
+            const vh = video.videoHeight || 720;
+            const targetAR = canvas.width / videoHeight;
+            const srcAR = vw / vh;
+
+            let sx = 0, sy = 0, sWidth = vw, sHeight = vh;
+            if (srcAR > targetAR) {
+                sWidth = Math.round(vh * targetAR);
+                sx = Math.round((vw - sWidth) / 2);
+            } else {
+                sHeight = Math.round(vw / targetAR);
+                sy = Math.round((vh - sHeight) / 2);
+            }
+            ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, canvas.width, videoHeight);
+
+            // Inside capturePhoto(), AFTER `ctx.drawImage(video, ...)`:
+
+// ✅ LIGHTER stamp background — photo clearly visible
+const stampY = videoHeight;
+const gradient = ctx.createLinearGradient(0, stampY, 0, canvas.height);
+gradient.addColorStop(0, 'rgba(15,15,35,0.18)');   // very light at top
+gradient.addColorStop(1, 'rgba(10,10,25,0.42)');   // slightly darker at bottom
+ctx.fillStyle = gradient;
+ctx.fillRect(0, stampY, canvas.width, stampHeight);
+
+// Red accent line on top
+ctx.strokeStyle = 'rgba(233,69,96,1)';
+ctx.lineWidth = 3;
+ctx.beginPath();
+ctx.moveTo(0, stampY);
+ctx.lineTo(canvas.width, stampY);
+ctx.stroke();
+
+// ✅ Layout — padX is now ~4% of width (matches the reference)
+const padX = Math.round(canvas.width * 0.04);       // ~41px on 1024
+const padTop = 12;
+const lineGap = 4;
+
+const fsCompany = 22;
+const fsAddress = 16;
+const fsGPS = 16;
+const fsTime = 16;
+const fsCount = 40;
+
+let y = stampY + padTop;
+
+// Reset shadow state first
+ctx.shadowBlur = 0;
+ctx.shadowOffsetX = 0;
+ctx.shadowOffsetY = 0;
+
+// --- Company line ---
+ctx.fillStyle = '#e94560';
+ctx.fillRect(padX, y + 3, 5, fsCompany - 5);
+
+ctx.textAlign = 'left';
+ctx.textBaseline = 'top';
+ctx.shadowColor = 'rgba(0,0,0,0.95)';
+ctx.shadowBlur = 5;
+ctx.shadowOffsetY = 1;
+ctx.font = `bold ${fsCompany}px 'Arial', 'Helvetica', sans-serif`;
+ctx.fillStyle = '#ffffff';
+ctx.fillText(CONFIG.companyName, padX + 14, y);
+y += fsCompany + lineGap;
+
+// --- Address ---
+ctx.font = `${fsAddress}px 'Arial', 'Helvetica', sans-serif`;
+ctx.fillStyle = '#dbe9ff';
+ctx.shadowBlur = 4;
+const addressLinesUsed = wrapByCharBudget(
+    `📍 ${address}`,
+    CONFIG.addressCharsPerLine,
+    CONFIG.addressMaxLines
+);
+for (const line of addressLinesUsed) {
+    ctx.fillText(line, padX, y);
+    y += fsAddress + lineGap;
+}
+
+// --- GPS ---
+ctx.font = `${fsGPS}px 'Courier New', monospace`;
+ctx.fillStyle = '#b6e86a';
+ctx.shadowBlur = 4;
+ctx.fillText(`Lat ${latStr}   Long ${lngStr}`, padX, y);
+y += fsGPS + lineGap;
+
+// --- Time ---
+ctx.font = `${fsTime}px 'Courier New', monospace`;
+ctx.fillStyle = '#ffe37a';
+ctx.shadowBlur = 4;
+ctx.fillText(`🕐 ${timestamp}  ${tzAbbr}`, padX, y);
+
+// --- Serial (top right) ---
+ctx.textAlign = 'right';
+ctx.textBaseline = 'top';
+ctx.shadowBlur = 5;
+ctx.font = `bold ${fsCount}px 'Arial Black', 'Arial', sans-serif`;
+ctx.fillStyle = 'rgba(255,215,0,0.70)';
+ctx.fillText(countLabel, canvas.width - padX, stampY + padTop);
+
+// --- Logo (bottom right) ---
+ctx.shadowBlur = 0;
+ctx.shadowOffsetX = 0;
+ctx.shadowOffsetY = 0;
+ctx.textAlign = 'right';
+ctx.textBaseline = 'bottom';
+
+const logoLw = 150;
+const logoLh = 42;
+const logoLx = canvas.width - padX - logoLw;
+const logoLy = canvas.height - logoLh - 10;
+
+if (logoReady && logoImage) {
+    try {
+        ctx.drawImage(logoImage, logoLx, logoLy, logoLw, logoLh);
+        console.log('✅ Logo drawn');
+    } catch (err) {
+        console.error('❌ Logo draw failed:', err);
+    }
+} else {
+    console.warn('⚠️ Logo NOT ready — drawing text fallback');
+    ctx.font = `bold 20px 'Arial Black', Arial, sans-serif`;
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.fillText('NSPIRA', canvas.width - padX, canvas.height - 10);
+}
+
+            // ✅ Convert the canvas to a JPEG blob
+            try {
+                canvas.toBlob((blob) => {
+                    if (!blob) {
+                        statusMsg.innerHTML = `<span class="error">❌ Failed to capture image.</span>`;
+                        return;
+                    }
+                    currentPhotoBlob = blob;
+                    previewImage.src = URL.createObjectURL(blob);
+                    previewWrapper.style.display = 'block';
+                    downloadBtn.disabled = false;
+                    statusMsg.innerHTML = `<span class="ready">✅ Captured (4:3). Press Download.</span>`;
+                }, 'image/jpeg', 0.92);
+            } catch (err) {
+                statusMsg.innerHTML = `<span class="error">❌ Capture failed: ${err.message}</span>`;
+            }
+        }   
+
+        // ============================================================
+        // DB upload
+        // ============================================================
+        async function uploadToDatabase(blob, meta) {
+            if (!CONFIG.dbUploadUrl) return { success: false, reason: 'no-endpoint' };
+            try {
+                const form = new FormData();
+                form.append('photo', blob, meta.filename);
+                form.append('serial', String(meta.serial));
+                form.append('company', CONFIG.companyName);
+                form.append('timestamp', meta.timestamp);
+                form.append('latitude', meta.lat !== null ? String(meta.lat) : '');
+                form.append('longitude', meta.lng !== null ? String(meta.lng) : '');
+                form.append('address', meta.address);
+                form.append('device', navigator.userAgent);
+
+                const headers = {};
+                if (CONFIG.dbApiKey) headers['Authorization'] = `Bearer ${CONFIG.dbApiKey}`;
+
+                const res = await fetch(CONFIG.dbUploadUrl, { method: 'POST', headers, body: form });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const json = await res.json().catch(() => ({}));
+                return { success: true, response: json };
+            } catch (err) {
+                return { success: false, reason: err.message };
+            }
+        }
+
+        // ============================================================
+        // Download
+        // ============================================================
+        async function downloadPhoto() {
+            if (!currentPhotoBlob) return;
+
+            const now = new Date();
+            const ts = now.getFullYear() +
+                String(now.getMonth() + 1).padStart(2, '0') +
+                String(now.getDate()).padStart(2, '0') + '_' +
+                String(now.getHours()).padStart(2, '0') +
+                String(now.getMinutes()).padStart(2, '0') +
+                String(now.getSeconds()).padStart(2, '0');
+            const filename = `Nspira_${currentPhotoSerial}_${ts}.jpg`;
+
+            commitSerial();
+
+            if (isIOS || (isSafari && !window.MSStream)) {
+                showIOSOverlay(filename);
+            } else {
+                try {
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(currentPhotoBlob);
+                    link.download = filename;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    setTimeout(() => URL.revokeObjectURL(link.href), 1500);
+                    statusMsg.innerHTML = `<span class="ready">✅ Downloaded: ${filename}</span>`;
+                } catch (e) {
+                    statusMsg.innerHTML = `<span class="warn">⚠️ Download issue — share fallback.</span>`;
+                    showIOSOverlay(filename);
+                }
+            }
+
+            const meta = {
+                filename,
+                serial: currentPhotoSerial,
+                timestamp: formatDateTime12hr(now),
+                lat: currentGPS.lat,
+                lng: currentGPS.lng,
+                address: currentGPS.address,
+            };
+            uploadToDatabase(currentPhotoBlob, meta).then((result) => {
+                if (result.success) {
+                    statusMsg.innerHTML += `<br /><span class="ready">☁️ Uploaded.</span>`;
+                } else if (result.reason !== 'no-endpoint') {
+                    statusMsg.innerHTML += `<br /><span class="warn">⚠️ DB upload failed.</span>`;
+                }
+            });
+
+            setTimeout(() => {
+                downloadBtn.disabled = true;
+                previewWrapper.style.display = 'none';
+                previewImage.src = '';
+                currentPhotoBlob = null;
+                serialCommitted = false;
+                updateUI();
+            }, 1500);
+        }
+
+        // ============================================================
+        // iOS overlay
+        // ============================================================
+        function showIOSOverlay(filename) {
+            iosOverlayImg.src = URL.createObjectURL(currentPhotoBlob);
+            iosOverlay.dataset.filename = filename;
+            iosOverlay.classList.add('active');
+        }
+
+        iosCloseBtn.addEventListener('click', () => {
+            iosOverlay.classList.remove('active');
+            if (iosOverlayImg.src) URL.revokeObjectURL(iosOverlayImg.src);
+        });
+
+        iosSaveBtn.addEventListener('click', async () => {
+            if (!currentPhotoBlob) return;
+            const filename = iosOverlay.dataset.filename || 'Nspira.jpg';
+            const file = new File([currentPhotoBlob], filename, { type: 'image/jpeg' });
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                try {
+                    await navigator.share({ files: [file], title: 'Nspira Photo' });
+                    statusMsg.innerHTML = `<span class="ready">✅ Shared/saved.</span>`;
+                } catch (e) { console.warn('Share cancelled:', e); }
+            } else {
+                alert('Long-press the image, then choose "Save to Photos".');
+            }
+        });
+
+        // ============================================================
+        // Reset
+        // ============================================================
+        async function resetSerial() {
+            photoCount = 0;
+            serialCommitted = false;
+            localStorage.setItem(CONFIG.lsSerialKey, '0');
+            updateUI();
+            statusMsg.innerHTML = `<span class="ready">✅ Serial reset. Next: NSP-1</span>`;
+        }
+        window.nspiraReset = resetSerial;
+
+        // ============================================================
+        // Switch camera
+        // ============================================================
+        async function switchCamera() {
+            facingMode = (facingMode === 'environment') ? 'user' : 'environment';
+            await startCamera(facingMode);
+        }
+
+        // ============================================================
+        // Event listeners
+        // ============================================================
+        captureBtn.addEventListener('click', capturePhoto);
+        downloadBtn.addEventListener('click', downloadPhoto);
+        switchBtn.addEventListener('click', switchCamera);
+
+        // ============================================================
+        // Init
+        // ============================================================
+        async function init() {
+            if (!window.isSecureContext) {
+                statusMsg.innerHTML = `<span class="error">❌ Camera requires HTTPS.</span>`;
+                return;
+            }
+            await loadLogo();
+            startGeolocation();
+            await startCamera('environment');
+            updateUI();
+        }
+        init();
+
+        console.log('📸 Nspira Camera App loaded!');
+    </script>
+</body>
+</html>
