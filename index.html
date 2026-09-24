@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
@@ -152,6 +152,7 @@
             display: block;
             filter: drop-shadow(0 1px 2px rgba(0,0,0,0.9));
         }
+
         .flash {
             position: absolute; top: 0; left: 0; right: 0; bottom: 0;
             background: white; opacity: 0; pointer-events: none; transition: opacity 0.1s;
@@ -257,7 +258,7 @@
 
     <div class="container">
         <div class="header">
-            <h1>Nspira Photo Stamping(By F&A)-3</h1>
+            <h1>Nspira Photo Stamping(By F&A)-4</h1>
         </div>
 
         <div class="video-wrapper" id="videoWrapper">
@@ -322,8 +323,8 @@
         const CONFIG = {
             companyName: 'Captured By Nspira Camera',
             countPrefix: 'NSP-',
-            addressMaxLines: 3,          // Up to 4 lines for a fuller address
-            addressCharsPerLine: 80,     // Better fit for building/institution names
+            addressMaxLines: 4,          // Up to 4 lines for a fuller address
+            addressCharsPerLine: 62,     // Better fit for building/institution names
             dbUploadUrl: '',
             dbApiKey: '',
             lsSerialKey: 'nspira_serial_count',
@@ -828,13 +829,11 @@
             canvas.height = CONFIG.outputHeight;
             const ctx = canvas.getContext('2d');
 
-            const stampHeight = Math.round(canvas.height * CONFIG.stampRatioOfHeight);
-            const videoHeight = canvas.height - stampHeight;
-
-            // Video (center-crop fill)
+            // Draw the camera image across the ENTIRE canvas first.
+            // The GPS panel is now an overlay, so the photo remains visible behind it.
             const vw = video.videoWidth || 1280;
             const vh = video.videoHeight || 720;
-            const targetAR = canvas.width / videoHeight;
+            const targetAR = canvas.width / canvas.height;
             const srcAR = vw / vh;
 
             let sx = 0, sy = 0, sWidth = vw, sHeight = vh;
@@ -845,37 +844,37 @@
                 sHeight = Math.round(vw / targetAR);
                 sy = Math.round((vh - sHeight) / 2);
             }
-            ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, canvas.width, videoHeight);
+            ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, canvas.width, canvas.height);
 
-            // Inside capturePhoto(), AFTER `ctx.drawImage(video, ...)`:
+            // Compact translucent GPS overlay over the bottom of the actual photo.
+            const stampHeight = Math.round(canvas.height * 0.22);
+            const stampY = canvas.height - stampHeight;
 
-// ✅ LIGHTER stamp background — photo clearly visible
-const stampY = videoHeight;
-const gradient = ctx.createLinearGradient(0, stampY, 0, canvas.height);
-gradient.addColorStop(0, 'rgba(255,255,255,0.08)');
-gradient.addColorStop(0.55, 'rgba(255,255,255,0.12)');
-gradient.addColorStop(1, 'rgba(255,255,255,0.18)');
-ctx.fillStyle = gradient;
-ctx.fillRect(0, stampY, canvas.width, stampHeight);
+            const gradient = ctx.createLinearGradient(0, stampY, 0, canvas.height);
+            gradient.addColorStop(0, 'rgba(255,255,255,0.12)');
+            gradient.addColorStop(0.45, 'rgba(255,255,255,0.20)');
+            gradient.addColorStop(1, 'rgba(255,255,255,0.28)');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, stampY, canvas.width, stampHeight);
 
-// Red accent line on top
-ctx.strokeStyle = 'rgba(233,69,96,1)';
-ctx.lineWidth = 3;
-ctx.beginPath();
-ctx.moveTo(0, stampY);
-ctx.lineTo(canvas.width, stampY);
-ctx.stroke();
+            // Subtle red accent line.
+            ctx.strokeStyle = 'rgba(233,69,96,0.95)';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(0, stampY);
+            ctx.lineTo(canvas.width, stampY);
+            ctx.stroke();
 
-// ✅ Layout — padX is now ~4% of width (matches the reference)
-const padX = Math.round(canvas.width * 0.04);       // ~41px on 1024
-const padTop = 12;
-const lineGap = 4;
+            // Compact layout: less empty space, tighter line spacing.
+            const padX = Math.round(canvas.width * 0.04);
+            const padTop = 9;
+            const lineGap = 2;
 
-const fsCompany = 22;
-const fsAddress = 16;
-const fsGPS = 16;
-const fsTime = 16;
-const fsCount = 40;
+            const fsCompany = 20;
+            const fsAddress = 15;
+            const fsGPS = 14;
+            const fsTime = 14;
+            const fsCount = 36;
 
 let y = stampY + padTop;
 
@@ -940,10 +939,10 @@ ctx.shadowOffsetY = 0;
 ctx.textAlign = 'right';
 ctx.textBaseline = 'bottom';
 
-const logoLw = 150;
-const logoLh = 42;
+const logoLw = 125;
+const logoLh = 35;
 const logoLx = canvas.width - padX - logoLw;
-const logoLy = canvas.height - logoLh - 10;
+const logoLy = canvas.height - logoLh - 8;
 
 if (logoReady && logoImage) {
     try {
