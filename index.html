@@ -253,7 +253,7 @@
 
     <div class="container">
         <div class="header">
-            <h1>Nspira Photo Stamping(By F&A)</h1>
+            <h1>Nspira Photo Stamping(By F&A)-1</h1>
         </div>
 
         <div class="video-wrapper" id="videoWrapper">
@@ -375,7 +375,7 @@
         let currentPhotoBlob = null;
         let currentPhotoSerial = 0;
         let currentBatchId = '';
-        let currentUploadPromise = null;
+        let currentPhotoMeta = null;
         let captureInProgress = false;
         let currentGPS = { lat: null, lng: null, accuracy: null, address: 'Detecting address...' };
         let watchId = null;
@@ -410,7 +410,7 @@
         }
 
         // ============================================================
-        // Supabase authentication + central serial allocation
+        // Supabase authentication + central serial control
         // ============================================================
         async function initSupabase() {
             try {
@@ -437,12 +437,12 @@
             }
         }
 
-        async function allocateNextSerial() {
-            if (!supabaseReady) {
-                throw new Error('Secure backend is not ready.');
-            }
+        // Read the next central number WITHOUT changing it.
+        // The number is committed only after the image has uploaded successfully.
+        async function peekNextSerial() {
+            if (!supabaseReady) throw new Error('Secure backend is not ready.');
 
-            const { data, error } = await supabaseClient.rpc('get_next_serial');
+            const { data, error } = await supabaseClient.rpc('peek_next_serial');
             if (error) throw error;
 
             const row = Array.isArray(data) ? data[0] : data;
@@ -454,6 +454,23 @@
                 serial: Number(row.serial_number),
                 batchId: String(row.batch_id)
             };
+        }
+
+        // Commit the serial and photo database record atomically in PostgreSQL.
+        async function commitPhotoRecord(meta) {
+            const { data, error } = await supabaseClient.rpc('commit_photo', {
+                p_serial_number: meta.serial,
+                p_batch_id: meta.batchId,
+                p_file_name: meta.filename,
+                p_date_time: meta.timestamp,
+                p_latitude: meta.lat,
+                p_longitude: meta.lng,
+                p_address: meta.address,
+                p_storage_path: meta.storagePath
+            });
+
+            if (error) throw error;
+            return data;
         }
 
         // ============================================================
@@ -784,19 +801,89 @@
         // ============================================================
         // Camera
         // ============================================================
+        async function waitForVideoReady(timeoutMs = 5000) {
+            if (video.readyState >= 3 && video.videoWidth > 0 && video.videoHeight > 0) return true;
+
+            return await new Promise((resolve) => {
+                let finished = false;
+                const done = (ok) => {
+                    if (finished) return;
+                    finished = true;
+                    clearTimeout(timer);
+                    video.removeEventListener('loadedmetadata', onReady);
+                    video.removeEventListener('canplay', onReady);
+                    resolve(ok);
+                };
+                const onReady = () => {
+                    if (video.videoWidth > 0 && video.videoHeight > 0) done(true);
+                };
+                const timer = setTimeout(() => done(false), timeoutMs);
+                video.addEventListener('loadedmetadata', onReady);
+                video.addEventListener('canplay', onReady);
+            });
+        }
+
+        // ============================================================
+        // Camera
+        // ============================================================
         async function startCamera(faceMode) {
             try {
-                if (stream) stream.getTracks().forEach(t => t.stop());
+                // Fully release the previous camera before requesting another one.
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                    stream = null;
+                }
+                if (video.srcObject) {
+                    video.pause();
+                    video.srcObject = null;
+                }
+
+                // Small delay prevents Chrome from racing the old camera track.
+                await new Promise(resolve => setTimeout(resolve, 250));
+
                 const constraints = {
-                    video: { facingMode: faceMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
-                    audio: false,
+                    video: {
+                        facingMode: { exact: faceMode },
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    },
+                    audio: false
                 };
-                stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia(constraints);
+                } catch (exactErr) {
+                    // Some devices reject exact facingMode. Fall back to ideal.
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: { ideal: faceMode },
+                            width: { ideal: 1920 },
+                            height: { ideal: 1080 }
+                        },
+                        audio: false
+                    });
+                }
+
+                video.muted = true;
+                video.playsInline = true;
+                video.setAttribute('playsinline', '');
                 video.srcObject = stream;
+
+                const ready = await waitForVideoReady(6000);
+                if (!ready) throw new Error('Camera opened but video frames are not ready.');
+
                 await video.play();
+                await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
                 statusMsg.innerHTML = `<span class="ready">✅ Camera ready (${faceMode === 'environment' ? 'Rear' : 'Front'})</span>`;
                 return true;
             } catch (err) {
+                console.error('Camera start failed:', err);
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                    stream = null;
+                }
+                video.srcObject = null;
                 statusMsg.innerHTML = `<span class="error">❌ Camera error: ${err.message}</span>`;
                 return false;
             }
@@ -850,23 +937,16 @@
             captureInProgress = true;
             updateUI();
 
-            try {
-                // Allocate the NSP number centrally at capture time.
-                // This prevents duplicate numbers when several phones capture at once.
-                const allocation = await allocateNextSerial();
-                currentPhotoSerial = allocation.serial;
-                currentBatchId = allocation.batchId;
-            } catch (err) {
-                captureInProgress = false;
-                updateUI();
-                statusMsg.innerHTML = `<span class="error">❌ Could not get NSP number: ${err.message}</span>`;
-                return;
-            }
+            // IMPORTANT: Capture does NOT allocate or increment an NSP number.
+            // The central number is assigned only when Download is pressed.
+            currentPhotoSerial = 0;
+            currentBatchId = '';
+            currentPhotoMeta = null;
 
             flash.classList.add('active');
             setTimeout(() => flash.classList.remove('active'), 150);
 
-            const countLabel = `${CONFIG.countPrefix}${currentPhotoSerial}`;
+            const countLabel = 'NSP-PENDING';
 
             const now = new Date();
             const timestamp = formatDateTime12hr(now);
@@ -979,13 +1059,8 @@ ctx.shadowBlur = 4;
 ctx.fillText('🕐 ', iconX, y);
 ctx.fillText(`${timestamp}  ${tzAbbr}`, textX, y);
 
-// --- Serial (top right) ---
-ctx.textAlign = 'right';
-ctx.textBaseline = 'top';
-ctx.shadowBlur = 5;
-ctx.font = `bold ${fsCount}px 'Arial Black', 'Arial', sans-serif`;
-ctx.fillStyle = 'rgba(255,215,0,0.70)';
-ctx.fillText(countLabel, canvas.width - padX, stampY + padTop);
+// --- Serial is intentionally NOT stamped at capture time. ---
+// It is added only after the user presses Download and the backend accepts the photo.
 
 // --- Logo (bottom right) ---
 ctx.shadowBlur = 0;
@@ -1027,25 +1102,14 @@ if (logoReady && logoImage) {
                     captureInProgress = false;
                     updateUI();
 
-                    const meta = {
-                        filename: `Nspira_${currentPhotoSerial}_${Date.now()}.jpg`,
-                        serial: currentPhotoSerial,
-                        batchId: currentBatchId,
+                    currentPhotoMeta = {
                         timestamp,
                         lat,
                         lng,
                         address
                     };
 
-                    statusMsg.innerHTML = `<span class="ready">✅ Captured ${countLabel}. Uploading securely...</span>`;
-                    currentUploadPromise = uploadToDatabase(currentPhotoBlob, meta);
-                    currentUploadPromise.then((result) => {
-                        if (result.success) {
-                            statusMsg.innerHTML = `<span class="ready">✅ Captured ${countLabel}. ☁️ Uploaded.</span>`;
-                        } else {
-                            statusMsg.innerHTML = `<span class="warn">⚠️ Captured ${countLabel}, but backend upload failed: ${result.reason}</span>`;
-                        }
-                    });
+                    statusMsg.innerHTML = `<span class="ready">✅ Photo captured. Press Download to save and assign NSP number.</span>`;
                 }, 'image/jpeg', 0.92);
             } catch (err) {
                 captureInProgress = false;
@@ -1093,97 +1157,183 @@ if (logoReady && logoImage) {
             });
         }
 
-        async function uploadToDatabase(blob, meta) {
+        function stampFinalSerial(blob, serial) {
+            return new Promise((resolve, reject) => {
+                const objectUrl = URL.createObjectURL(blob);
+                const img = new Image();
+
+                img.onload = () => {
+                    try {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = CONFIG.outputWidth;
+                        canvas.height = CONFIG.outputHeight;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                        const stampHeight = Math.round(canvas.height * 0.20);
+                        const stampY = canvas.height - stampHeight;
+                        const padX = Math.round(canvas.width * 0.04);
+                        const padTop = 7;
+                        const fsCount = 36;
+
+                        ctx.textAlign = 'right';
+                        ctx.textBaseline = 'top';
+                        ctx.shadowColor = 'rgba(0,0,0,0.75)';
+                        ctx.shadowBlur = 5;
+                        ctx.shadowOffsetY = 1;
+                        ctx.font = `bold ${fsCount}px 'Arial Black', 'Arial', sans-serif`;
+                        ctx.fillStyle = 'rgba(255,215,0,0.70)';
+                        ctx.fillText(`${CONFIG.countPrefix}${serial}`, canvas.width - padX, stampY + padTop);
+
+                        canvas.toBlob((finalBlob) => {
+                            URL.revokeObjectURL(objectUrl);
+                            if (!finalBlob) {
+                                reject(new Error('Could not create final stamped image.'));
+                            } else {
+                                resolve(finalBlob);
+                            }
+                        }, 'image/jpeg', 0.92);
+                    } catch (err) {
+                        URL.revokeObjectURL(objectUrl);
+                        reject(err);
+                    }
+                };
+
+                img.onerror = () => {
+                    URL.revokeObjectURL(objectUrl);
+                    reject(new Error('Could not prepare final image.'));
+                };
+
+                img.src = objectUrl;
+            });
+        }
+
+        async function uploadFinalPhoto(blob, meta) {
+            const uploadBlob = await compressForUpload(blob);
+            const safeBatch = String(meta.batchId).replace(/[^a-zA-Z0-9_-]/g, '_');
+            const storagePath = `${safeBatch}/${meta.serial}_${Date.now()}_${crypto.randomUUID()}.jpg`;
+
+            const { error: storageError } = await supabaseClient
+                .storage
+                .from(CONFIG.storageBucket)
+                .upload(storagePath, uploadBlob, {
+                    contentType: 'image/jpeg',
+                    cacheControl: '3600',
+                    upsert: false
+                });
+
+            if (storageError) throw storageError;
+
             try {
-                if (!supabaseReady) throw new Error('Supabase authentication is not ready.');
-
-                const uploadBlob = await compressForUpload(blob);
-                const safeBatch = String(meta.batchId).replace(/[^a-zA-Z0-9_-]/g, '_');
-                const storagePath = `${safeBatch}/${meta.serial}_${Date.now()}_${crypto.randomUUID()}.jpg`;
-
-                const { error: storageError } = await supabaseClient
-                    .storage
-                    .from(CONFIG.storageBucket)
-                    .upload(storagePath, uploadBlob, {
-                        contentType: 'image/jpeg',
-                        cacheControl: '3600',
-                        upsert: false
-                    });
-
-                if (storageError) throw storageError;
-
-                const { error: rowError } = await supabaseClient
-                    .from('photos')
-                    .insert({
-                        serial_number: meta.serial,
-                        file_name: meta.filename,
-                        date_time: meta.timestamp,
-                        latitude: meta.lat,
-                        longitude: meta.lng,
-                        address: meta.address,
-                        storage_path: storagePath,
-                        batch_id: meta.batchId
-                    });
-
-                if (rowError) {
-                    // Best-effort cleanup if the database row could not be created.
-                    await supabaseClient.storage
-                        .from(CONFIG.storageBucket)
-                        .remove([storagePath])
-                        .catch(() => {});
-                    throw rowError;
-                }
-
-                return { success: true, storagePath };
+                await commitPhotoRecord({ ...meta, storagePath });
             } catch (err) {
-                console.error('Supabase upload failed:', err);
-                return { success: false, reason: err.message || 'Unknown upload error' };
+                await supabaseClient.storage
+                    .from(CONFIG.storageBucket)
+                    .remove([storagePath])
+                    .catch(() => {});
+                throw err;
             }
+
+            return { success: true, storagePath };
         }
 
         // ============================================================
-        // Download
+        // Download = final commit point
         // ============================================================
         async function downloadPhoto() {
-            if (!currentPhotoBlob) return;
+            if (!currentPhotoBlob || !currentPhotoMeta) return;
+            if (!supabaseReady) {
+                statusMsg.innerHTML = `<span class="error">❌ Secure backend is not ready.</span>`;
+                return;
+            }
 
-            const now = new Date();
-            const ts = now.getFullYear() +
-                String(now.getMonth() + 1).padStart(2, '0') +
-                String(now.getDate()).padStart(2, '0') + '_' +
-                String(now.getHours()).padStart(2, '0') +
-                String(now.getMinutes()).padStart(2, '0') +
-                String(now.getSeconds()).padStart(2, '0');
-            const filename = `Nspira_${currentPhotoSerial}_${ts}.jpg`;
+            downloadBtn.disabled = true;
+            statusMsg.innerHTML = `<span class="ready">⏳ Saving photo securely and assigning NSP number...</span>`;
 
-            if (isIOS || (isSafari && !window.MSStream)) {
-                showIOSOverlay(filename);
-            } else {
-                try {
+            try {
+                // Retry a few times in case another user commits the same next number
+                // between our peek and commit. This keeps the central counter unique.
+                let committed = false;
+                let finalBlob = null;
+                let committedMeta = null;
+
+                for (let attempt = 0; attempt < 3 && !committed; attempt++) {
+                    const allocation = await peekNextSerial();
+                    const finalSerial = allocation.serial;
+                    const batchId = allocation.batchId;
+
+                    finalBlob = await stampFinalSerial(currentPhotoBlob, finalSerial);
+
+                    const now = new Date();
+                    const ts = now.getFullYear() +
+                        String(now.getMonth() + 1).padStart(2, '0') +
+                        String(now.getDate()).padStart(2, '0') + '_' +
+                        String(now.getHours()).padStart(2, '0') +
+                        String(now.getMinutes()).padStart(2, '0') +
+                        String(now.getSeconds()).padStart(2, '0');
+                    const filename = `Nspira_${finalSerial}_${ts}.jpg`;
+
+                    committedMeta = {
+                        filename,
+                        serial: finalSerial,
+                        batchId,
+                        timestamp: currentPhotoMeta.timestamp,
+                        lat: currentPhotoMeta.lat,
+                        lng: currentPhotoMeta.lng,
+                        address: currentPhotoMeta.address
+                    };
+
+                    try {
+                        await uploadFinalPhoto(finalBlob, committedMeta);
+                        committed = true;
+                    } catch (err) {
+                        // Serial changed because another client committed first.
+                        // Retry with the new next serial. Other errors stop immediately.
+                        if (String(err.message || '').includes('Serial changed') || String(err.message || '').includes('serial')) {
+                            continue;
+                        }
+                        throw err;
+                    }
+                }
+
+                if (!committed || !finalBlob || !committedMeta) {
+                    throw new Error('Could not obtain a unique NSP number. Please try Download again.');
+                }
+
+                currentPhotoSerial = committedMeta.serial;
+                currentBatchId = committedMeta.batchId;
+
+                // Download exactly the same final image that was uploaded.
+                if (isIOS || (isSafari && !window.MSStream)) {
+                    currentPhotoBlob = finalBlob;
+                    showIOSOverlay(committedMeta.filename);
+                } else {
                     const link = document.createElement('a');
-                    link.href = URL.createObjectURL(currentPhotoBlob);
-                    link.download = filename;
+                    link.href = URL.createObjectURL(finalBlob);
+                    link.download = committedMeta.filename;
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
                     setTimeout(() => URL.revokeObjectURL(link.href), 1500);
-                    statusMsg.innerHTML = `<span class="ready">✅ Downloaded: ${filename}</span>`;
-                } catch (e) {
-                    statusMsg.innerHTML = `<span class="warn">⚠️ Download issue — share fallback.</span>`;
-                    showIOSOverlay(filename);
                 }
-            }
 
-            setTimeout(() => {
-                downloadBtn.disabled = true;
-                previewWrapper.style.display = 'none';
-                previewImage.src = '';
-                currentPhotoBlob = null;
-                currentPhotoSerial = 0;
-                currentBatchId = '';
-                currentUploadPromise = null;
-                updateUI();
-            }, 1500);
+                statusMsg.innerHTML = `<span class="ready">✅ Downloaded and saved: NSP-${committedMeta.serial}</span>`;
+
+                setTimeout(() => {
+                    downloadBtn.disabled = true;
+                    previewWrapper.style.display = 'none';
+                    previewImage.src = '';
+                    currentPhotoBlob = null;
+                    currentPhotoSerial = 0;
+                    currentBatchId = '';
+                    currentPhotoMeta = null;
+                    updateUI();
+                }, 1500);
+            } catch (err) {
+                console.error('Final download/upload failed:', err);
+                downloadBtn.disabled = false;
+                statusMsg.innerHTML = `<span class="error">❌ Photo was not saved. NSP number was not committed. ${err.message}</span>`;
+            }
         }
 
         // ============================================================
