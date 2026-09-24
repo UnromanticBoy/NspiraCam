@@ -252,16 +252,16 @@
 
     <div class="container">
         <div class="header">
-            <h1>Nspira Photo Stamping(By F&A)-2</h1>
+            <h1>Nspira Photo Stamping(By F&A)-3</h1>
         </div>
 
         <div class="video-wrapper" id="videoWrapper">
             <video id="video" autoplay playsinline muted></video>
 
             <div class="live-stamp" id="liveStamp">
-                <div class="ls-company">Captured By Nspira Camera</div><br>
-                <div class="ls-address" id="lsAddress">📍 Detecting address...</div><br>
-                <div class="ls-gps" id="lsGps">Lat --.------°   Long --.------°</div><br>
+                <div class="ls-company">Captured By Nspira Camera</div>
+                <div class="ls-address" id="lsAddress">📍 Detecting address...</div>
+                <div class="ls-gps" id="lsGps">Lat --.------°   Long --.------°</div>
                 <div class="ls-time" id="lsTime">🕐 --/--/---- --:--:-- --</div>
                 <img class="ls-logo" id="lsLogo" src="https://mynspira.in/assets/images/logo-light.png" alt="NSPIRA logo">
             </div>
@@ -837,7 +837,7 @@
 
             // Shaded GPS overlay: the photo remains visible, but the shade is strong enough
             // to keep every GPS/address line readable even on white or very bright photos.
-            const stampHeight = Math.round(canvas.height * 0.22);
+            const stampHeight = Math.round(canvas.height * 0.18);
             const stampY = canvas.height - stampHeight;
 
             const stampBg = ctx.createLinearGradient(0, stampY, 0, canvas.height);
@@ -856,13 +856,13 @@
 
             // Compact layout: less empty space, tighter line spacing.
             const padX = Math.round(canvas.width * 0.04);
-            const padTop = 9;
-            const lineGap = 2;
+            const padTop = 7;
+            const lineGap = 1;
 
-            const fsCompany = 20;
-            const fsAddress = 15;
-            const fsGPS = 14;
-            const fsTime = 14;
+            const fsCompany = 22;
+            const fsAddress = 17;
+            const fsGPS = 15;
+            const fsTime = 15;
             const fsCount = 36;
 
 let y = stampY + padTop;
@@ -871,10 +871,6 @@ let y = stampY + padTop;
 ctx.shadowBlur = 0;
 ctx.shadowOffsetX = 0;
 ctx.shadowOffsetY = 0;
-
-// --- Company line ---
-ctx.fillStyle = '#e94560';
-ctx.fillRect(padX, y + 3, 5, fsCompany - 5);
 
 ctx.textAlign = 'left';
 ctx.textBaseline = 'top';
