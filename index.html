@@ -252,7 +252,7 @@
 
     <div class="container">
         <div class="header">
-            <h1>Nspira Photo Stamping(By F&A)-1</h1>
+            <h1>Nspira Photo Stamping(By F&A)-1.5</h1>
         </div>
 
         <div class="video-wrapper" id="videoWrapper">
@@ -889,7 +889,7 @@ const textX = padX + 24;
 ctx.font = `${fsAddress}px 'Arial', 'Helvetica', sans-serif`;
 ctx.fillStyle = '#dbe9ff';
 ctx.shadowBlur = 4;
-ctx.fillText('📍', iconX, y);
+ctx.fillText('📍 ', iconX, y);
 const addressLinesUsed = wrapByCharBudget(
     address,
     CONFIG.addressCharsPerLine,
@@ -904,7 +904,7 @@ for (const line of addressLinesUsed) {
 ctx.font = `${fsGPS}px 'Courier New', monospace`;
 ctx.fillStyle = '#b6e86a';
 ctx.shadowBlur = 4;
-ctx.fillText('🧭 ', iconX, y);
+ctx.fillText('GPS ', iconX, y);
 ctx.fillText(`Lat ${latStr}   Long ${lngStr}`, textX, y);
 y += fsGPS + lineGap;
 
