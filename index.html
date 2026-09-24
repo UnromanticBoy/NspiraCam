@@ -252,7 +252,7 @@
 
     <div class="container">
         <div class="header">
-            <h1>Nspira Photo Stamping(By F&A)-3</h1>
+            <h1>Nspira Photo Stamping(By F&A)</h1>
         </div>
 
         <div class="video-wrapper" id="videoWrapper">
@@ -323,7 +323,7 @@
             lsSerialKey: 'nspira_serial_count',
             // ✅ Use embedded logo — no CORS, always draws
             logoDataUri: LOGO_DATA_URI,
-            outputWidth: 1024,
+            outputWidth: 1280,
             outputHeight: 768,
             // ✅ Stamp: 28% of 4:3 canvas (photo gets 72% — matches reference)
             stampRatioOfHeight: 0.28,
@@ -837,7 +837,7 @@
 
             // Shaded GPS overlay: the photo remains visible, but the shade is strong enough
             // to keep every GPS/address line readable even on white or very bright photos.
-            const stampHeight = Math.round(canvas.height * 0.18);
+            const stampHeight = Math.round(canvas.height * 0.20);
             const stampY = canvas.height - stampHeight;
 
             const stampBg = ctx.createLinearGradient(0, stampY, 0, canvas.height);
@@ -859,10 +859,10 @@
             const padTop = 7;
             const lineGap = 1;
 
-            const fsCompany = 22;
-            const fsAddress = 17;
-            const fsGPS = 15;
-            const fsTime = 15;
+            const fsCompany = 21;
+            const fsAddress = 16;
+            const fsGPS = 14;
+            const fsTime = 14;
             const fsCount = 36;
 
 let y = stampY + padTop;
@@ -872,6 +872,7 @@ ctx.shadowBlur = 0;
 ctx.shadowOffsetX = 0;
 ctx.shadowOffsetY = 0;
 
+// --- Company line ---
 ctx.textAlign = 'left';
 ctx.textBaseline = 'top';
 ctx.shadowColor = 'rgba(0,0,0,0.75)';
@@ -879,35 +880,40 @@ ctx.shadowBlur = 5;
 ctx.shadowOffsetY = 1;
 ctx.font = `bold ${fsCompany}px 'Arial', 'Helvetica', sans-serif`;
 ctx.fillStyle = '#ffffff';
-ctx.fillText(CONFIG.companyName, padX + 14, y);
+ctx.fillText(CONFIG.companyName, padX, y);
 y += fsCompany + lineGap;
 
-// --- Address ---
+// --- Address: icon stays in its own column; every wrapped line starts straight ---
+const iconX = padX;
+const textX = padX + 24;
 ctx.font = `${fsAddress}px 'Arial', 'Helvetica', sans-serif`;
 ctx.fillStyle = '#dbe9ff';
 ctx.shadowBlur = 4;
+ctx.fillText('📍', iconX, y);
 const addressLinesUsed = wrapByCharBudget(
-    `📍 ${address}`,
+    address,
     CONFIG.addressCharsPerLine,
     CONFIG.addressMaxLines
 );
 for (const line of addressLinesUsed) {
-    ctx.fillText(line, padX, y);
+    ctx.fillText(line, textX, y);
     y += fsAddress + lineGap;
 }
 
-// --- GPS ---
+// --- GPS: aligned with the address text column ---
 ctx.font = `${fsGPS}px 'Courier New', monospace`;
 ctx.fillStyle = '#b6e86a';
 ctx.shadowBlur = 4;
-ctx.fillText(`Lat ${latStr}   Long ${lngStr}`, padX, y);
+ctx.fillText('GPS', iconX, y);
+ctx.fillText(`Lat ${latStr}   Long ${lngStr}`, textX, y);
 y += fsGPS + lineGap;
 
-// --- Time ---
+// --- Time: icon stays in its own column; text starts at the same x as address/GPS ---
 ctx.font = `${fsTime}px 'Courier New', monospace`;
 ctx.fillStyle = '#ffe37a';
 ctx.shadowBlur = 4;
-ctx.fillText(`🕐 ${timestamp}  ${tzAbbr}`, padX, y);
+ctx.fillText('🕐', iconX, y);
+ctx.fillText(`${timestamp}  ${tzAbbr}`, textX, y);
 
 // --- Serial (top right) ---
 ctx.textAlign = 'right';
@@ -954,7 +960,7 @@ if (logoReady && logoImage) {
                     previewImage.src = URL.createObjectURL(blob);
                     previewWrapper.style.display = 'block';
                     downloadBtn.disabled = false;
-                    statusMsg.innerHTML = `<span class="ready">✅ Captured (4:3). Press Download.</span>`;
+                    statusMsg.innerHTML = `<span class="ready">✅ Captured (5:3). Press Download.</span>`;
                 }, 'image/jpeg', 0.92);
             } catch (err) {
                 statusMsg.innerHTML = `<span class="error">❌ Capture failed: ${err.message}</span>`;
