@@ -252,16 +252,16 @@
 
     <div class="container">
         <div class="header">
-            <h1>Nspira Photo Stamping(By F&A)-1</h1>
+            <h1>Nspira Photo Stamping(By F&A)-2</h1>
         </div>
 
         <div class="video-wrapper" id="videoWrapper">
             <video id="video" autoplay playsinline muted></video>
 
             <div class="live-stamp" id="liveStamp">
-                <div class="ls-company">Captured By Nspira Camera</div>
-                <div class="ls-address" id="lsAddress">📍 Detecting address...</div>
-                <div class="ls-gps" id="lsGps">Lat --.------°   Long --.------°</div>
+                <div class="ls-company">Captured By Nspira Camera</div><br>
+                <div class="ls-address" id="lsAddress">📍 Detecting address...</div><br>
+                <div class="ls-gps" id="lsGps">Lat --.------°   Long --.------°</div><br>
                 <div class="ls-time" id="lsTime">🕐 --/--/---- --:--:-- --</div>
                 <img class="ls-logo" id="lsLogo" src="https://mynspira.in/assets/images/logo-light.png" alt="NSPIRA logo">
             </div>
@@ -316,8 +316,8 @@
         const CONFIG = {
             companyName: 'Captured By Nspira Camera',
             countPrefix: 'NSP-',
-            addressMaxLines: 4,          // Up to 4 lines for a fuller address
-            addressCharsPerLine: 62,     // Better fit for building/institution names
+            addressMaxLines: 3,          // Up to 4 lines for a fuller address
+            addressCharsPerLine: 80,     // Better fit for building/institution names
             dbUploadUrl: '',
             dbApiKey: '',
             lsSerialKey: 'nspira_serial_count',
