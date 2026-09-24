@@ -67,13 +67,15 @@
             top: 0; left: 0;
         }
 
-        /* ✅ Lighter overlay so the photo behind is visible */
+        /* ✅ Light translucent overlay so the photo behind remains visible */
         .live-stamp {
             position: absolute;
             left: 0;
             right: 0;
             bottom: 0;
-            background: linear-gradient(180deg, rgba(20,20,40,0.35) 0%, rgba(10,10,25,0.62) 100%);
+            background: linear-gradient(180deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.20) 100%);
+            backdrop-filter: blur(1.5px);
+            -webkit-backdrop-filter: blur(1.5px);
             border-top: 2.5px solid rgba(233, 69, 96, 0.95);
             padding: 10px 14px 14px;
             color: #fff;
@@ -93,7 +95,7 @@
             line-height: 1.25;
             margin-bottom: 5px;
             padding-right: 80px;
-            text-shadow: 0 1px 3px rgba(0,0,0,0.95);
+            text-shadow: 0 1px 3px rgba(0,0,0,0.80);
         }
         .live-stamp .ls-company::before {
             content: '';
@@ -115,21 +117,21 @@
             -webkit-line-clamp: 3;
             -webkit-box-orient: vertical;
             overflow: hidden;
-            text-shadow: 0 1px 3px rgba(0,0,0,0.95);
+            text-shadow: 0 1px 3px rgba(0,0,0,0.80);
         }
         .live-stamp .ls-gps {
             font-size: 11.5px;
             color: #9ee06a;
             font-family: 'Courier New', monospace;
             margin-bottom: 4px;
-            text-shadow: 0 1px 3px rgba(0,0,0,0.95);
+            text-shadow: 0 1px 3px rgba(0,0,0,0.80);
         }
         .live-stamp .ls-time {
             font-size: 11.5px;
             color: #ffe37a;
             font-family: 'Courier New', monospace;
             padding-right: 100px;
-            text-shadow: 0 1px 3px rgba(0,0,0,0.95);
+            text-shadow: 0 1px 3px rgba(0,0,0,0.80);
         }
         .live-stamp .ls-serial {
             position: absolute;
@@ -140,7 +142,7 @@
             color: rgba(255, 215, 0, 0.65);
             font-family: 'Arial Black', Arial, sans-serif;
             letter-spacing: 0.5px;
-            text-shadow: 0 1px 4px rgba(0,0,0,0.95);
+            text-shadow: 0 1px 4px rgba(0,0,0,0.80);
         }
         .live-stamp .ls-logo {
             position: absolute;
@@ -258,7 +260,7 @@
 
     <div class="container">
         <div class="header">
-            <h1>Nspira Photo Stamping(By F&A)</h1>
+            <h1>Nspira Photo Stamping(By F&A)-1</h1>
         </div>
 
         <div class="video-wrapper" id="videoWrapper">
@@ -323,8 +325,8 @@
         const CONFIG = {
             companyName: 'Captured By Nspira Camera',
             countPrefix: 'NSP-',
-            addressMaxLines: 3,          // ✅ allow up to 4 lines (natural wrapping)
-            addressCharsPerLine: 70,     // ✅ natural width, doesn't shrink text
+            addressMaxLines: 4,          // Up to 4 lines for a fuller address
+            addressCharsPerLine: 62,     // Better fit for building/institution names
             dbUploadUrl: '',
             dbApiKey: '',
             lsSerialKey: 'nspira_serial_count',
@@ -484,14 +486,40 @@
             return /^[\x00-\x7F\s,.\-#/()&'":;°]+$/.test(str);
         }
 
-        function buildFullAddress(addr, displayName) {
+        function cleanPlaceName(value) {
+            if (!value || typeof value !== 'string') return '';
+            const clean = value.trim().replace(/\s+/g, ' ');
+            if (!clean || !isEnglishText(clean)) return '';
+            return clean;
+        }
+
+        function buildFullAddress(addr, displayName, placeName = '') {
             const parts = [];
 
+            // Name of the exact mapped place/building is more useful than
+            // generic address fields, so put it first.
+            const place = cleanPlaceName(placeName);
+            if (place) parts.push(place);
+
             const specific = [
-                addr.building, addr.amenity, addr.institution, addr.university,
-                addr.school, addr.office, addr.shop, addr.hospital, addr.clinic,
-                addr.hotel, addr.restaurant, addr.place_of_worship, addr.tourism,
-                addr.leisure, addr.industrial, addr.commercial, addr.retail,
+                addr.building,
+                addr.amenity,
+                addr.institution,
+                addr.university,
+                addr.school,
+                addr.college,
+                addr.office,
+                addr.shop,
+                addr.hospital,
+                addr.clinic,
+                addr.hotel,
+                addr.restaurant,
+                addr.place_of_worship,
+                addr.tourism,
+                addr.leisure,
+                addr.industrial,
+                addr.commercial,
+                addr.retail
             ];
 
             const generic = [
@@ -500,13 +528,16 @@
                 addr.neighbourhood || addr.suburb || addr.quarter,
                 addr.city_district || addr.district || addr.borough,
                 addr.city || addr.town || addr.village || addr.hamlet,
-                addr.county, addr.state_district, addr.state,
-                addr.postcode, addr.country,
+                addr.county,
+                addr.state_district,
+                addr.state,
+                addr.postcode,
+                addr.country
             ];
 
             const push = (v) => {
                 if (v && typeof v === 'string' && v.trim() && isEnglishText(v)) {
-                    const clean = v.trim();
+                    const clean = v.trim().replace(/\s+/g, ' ');
                     if (!parts.some(p => p.toLowerCase() === clean.toLowerCase())) {
                         parts.push(clean);
                     }
@@ -517,29 +548,156 @@
             generic.forEach(push);
 
             let result = parts.filter(Boolean).join(', ');
+
+            // Fallback to the provider's complete display name.
             if (result.length < 20 && displayName && isEnglishText(displayName)) {
-                result = displayName;
+                result = displayName.trim();
             }
+
             return result || 'Location not found';
+        }
+
+        function getBestPlaceName(data) {
+            if (!data) return '';
+
+            const candidates = [
+                data.name,
+                data.namedetails && data.namedetails['name:en'],
+                data.namedetails && data.namedetails.name,
+                data.address && data.address.amenity,
+                data.address && data.address.institution,
+                data.address && data.address.university,
+                data.address && data.address.school,
+                data.address && data.address.college,
+                data.address && data.address.building
+            ];
+
+            for (const value of candidates) {
+                const clean = cleanPlaceName(value);
+                // Do not use generic OSM type words as a "name".
+                if (clean && !/^(building|school|college|university|hospital|clinic|office|shop|restaurant|hotel|amenity)$/i.test(clean)) {
+                    return clean;
+                }
+            }
+            return '';
+        }
+
+        // Optional OSM nearby-name fallback. This helps when the GPS point
+        // lands on a road/entrance but a named institution/building is nearby.
+        async function getNearbyPlaceName(lat, lng) {
+            try {
+                const query = `
+                    [out:json][timeout:6];
+                    (
+                      nwr(around:80,${lat},${lng})["name"];
+                      nwr(around:80,${lat},${lng})["name:en"];
+                    );
+                    out center tags;
+                `;
+
+                const url = 'https://overpass-api.de/api/interpreter?data=' +
+                    encodeURIComponent(query);
+
+                const response = await fetch(url, {
+                    headers: { 'Accept': 'application/json' }
+                });
+
+                if (!response.ok) return '';
+
+                const data = await response.json();
+                const elements = Array.isArray(data.elements) ? data.elements : [];
+
+                const priority = {
+                    university: 1,
+                    college: 1,
+                    school: 1,
+                    hospital: 1,
+                    clinic: 1,
+                    public_building: 2,
+                    office: 2,
+                    government: 2,
+                    commercial: 3,
+                    retail: 3,
+                    shop: 3,
+                    building: 4
+                };
+
+                const candidates = elements.map(el => {
+                    const tags = el.tags || {};
+                    const name = cleanPlaceName(tags['name:en'] || tags.name || '');
+                    if (!name) return null;
+
+                    const lat2 = el.lat ?? el.center?.lat;
+                    const lon2 = el.lon ?? el.center?.lon;
+                    if (typeof lat2 !== 'number' || typeof lon2 !== 'number') return null;
+
+                    const type = tags.amenity || tags.office || tags.shop || tags.building || '';
+                    const rank = priority[type] || 5;
+
+                    const dLat = (lat2 - lat) * 111320;
+                    const dLon = (lon2 - lng) * 111320 * Math.cos(lat * Math.PI / 180);
+                    const distance = Math.sqrt(dLat * dLat + dLon * dLon);
+
+                    return { name, distance, rank, type };
+                }).filter(Boolean);
+
+                candidates.sort((a, b) => {
+                    if (a.rank !== b.rank) return a.rank - b.rank;
+                    return a.distance - b.distance;
+                });
+
+                // Only use a nearby name when it is genuinely close.
+                return candidates.length && candidates[0].distance <= 80
+                    ? candidates[0].name
+                    : '';
+            } catch (err) {
+                console.warn('Nearby place lookup failed:', err);
+                return '';
+            }
         }
 
         async function getLocationName(lat, lng) {
             try {
-                const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&accept-language=en&extratags=1`;
+                const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&namedetails=1&extratags=1&accept-language=en`;
+
                 const response = await fetch(url, {
-                    headers: { 'Accept': 'application/json', 'Accept-Language': 'en' }
+                    headers: {
+                        'Accept': 'application/json',
+                        'Accept-Language': 'en'
+                    }
                 });
+
+                if (!response.ok) throw new Error(`Nominatim HTTP ${response.status}`);
+
                 const data = await response.json();
-                if (data && data.address) {
-                    currentGPS.address = buildFullAddress(data.address, data.display_name);
-                } else if (data && data.display_name && isEnglishText(data.display_name)) {
-                    currentGPS.address = data.display_name;
-                } else {
-                    currentGPS.address = 'Address unavailable in English';
+                const placeName = getBestPlaceName(data);
+
+                // First use the exact reverse-geocoded object.
+                let address = buildFullAddress(
+                    data.address || {},
+                    data.display_name || '',
+                    placeName
+                );
+
+                // If OSM did not return a named object, look for a nearby
+                // named institution/building as a fallback.
+                if (!placeName || !data.name) {
+                    const nearbyName = await getNearbyPlaceName(lat, lng);
+                    if (nearbyName) {
+                        address = buildFullAddress(
+                            data.address || {},
+                            data.display_name || '',
+                            nearbyName
+                        );
+                    }
                 }
+
+                currentGPS.address = address || 'Location not found';
             } catch (err) {
+                console.warn('Reverse geocoding failed:', err);
                 currentGPS.address = 'Address lookup failed';
             }
+
             updateUI();
             return currentGPS.address;
         }
@@ -697,8 +855,9 @@
 // ✅ LIGHTER stamp background — photo clearly visible
 const stampY = videoHeight;
 const gradient = ctx.createLinearGradient(0, stampY, 0, canvas.height);
-gradient.addColorStop(0, 'rgba(15,15,35,0.18)');   // very light at top
-gradient.addColorStop(1, 'rgba(10,10,25,0.42)');   // slightly darker at bottom
+gradient.addColorStop(0, 'rgba(255,255,255,0.08)');
+gradient.addColorStop(0.55, 'rgba(255,255,255,0.12)');
+gradient.addColorStop(1, 'rgba(255,255,255,0.18)');
 ctx.fillStyle = gradient;
 ctx.fillRect(0, stampY, canvas.width, stampHeight);
 
@@ -734,7 +893,7 @@ ctx.fillRect(padX, y + 3, 5, fsCompany - 5);
 
 ctx.textAlign = 'left';
 ctx.textBaseline = 'top';
-ctx.shadowColor = 'rgba(0,0,0,0.95)';
+ctx.shadowColor = 'rgba(0,0,0,0.75)';
 ctx.shadowBlur = 5;
 ctx.shadowOffsetY = 1;
 ctx.font = `bold ${fsCompany}px 'Arial', 'Helvetica', sans-serif`;
